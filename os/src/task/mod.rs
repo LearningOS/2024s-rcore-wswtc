@@ -14,6 +14,17 @@ mod switch;
 #[allow(clippy::module_inception)]
 mod task;
 
+use crate::mm::VPNRange;
+//
+use crate::timer::get_time_ms;
+use crate::task::task::TaskInfoInner;
+use crate::syscall::process::TaskInfo;
+pub use crate::mm::memory_set::{kernel_stack_position, MapPermission, MemorySet, KERNEL_SPACE};
+use crate::mm::VirtPageNum;
+use crate::mm::VirtAddr;
+use crate::config::PAGE_SIZE;
+//use crate::mm::VPNRange;
+//
 use crate::loader::{get_app_data, get_num_app};
 use crate::sync::UPSafeCell;
 use crate::trap::TrapContext;
@@ -153,8 +164,133 @@ impl TaskManager {
             panic!("All applications completed!");
         }
     }
+    /// lab4 add 
+    fn set_syscall_times(&self, syscall_id: usize) {
+        let mut inner = self.inner.exclusive_access();
+        let current_id = inner.current_task;
+        inner.tasks[current_id].task_info_inner.syscall_times[syscall_id] += 1;
+    }
+    /// lab4 add
+    fn get_current_task_info(&self, ti: *mut TaskInfo) {
+        let inner = self.inner.exclusive_access();
+        let current_id = inner.current_task;
+        let TaskInfoInner {syscall_times, start_time} = inner.tasks[current_id].task_info_inner;
+
+        unsafe {
+            *ti = TaskInfo {
+                status: TaskStatus::Running,
+                syscall_times,
+                time: get_time_ms() - start_time,
+            };
+        }
+    }
+    /// lab4 add
+    fn task_map(&self, start: usize, len: usize, port: usize) -> isize {
+        if start & (PAGE_SIZE - 1) != 0 {
+            // println!(
+            //     "expect the start address to be aligned with a page, but get an invalid start: {:#x}",
+            //     start
+            // );
+            return -1;
+        }
+        // port最低三位[x w r]，其他位必须为0
+        if port > 7usize || port == 0 {
+            //println!("invalid port: {:#b}", port);
+            return -1;
+        }
+
+        let mut inner = self.inner.exclusive_access();
+        let task_id = inner.current_task;
+        let current_task = &mut inner.tasks[task_id];
+        let memory_set = &mut current_task.memory_set;
+  
+        // check valid
+        let start_vpn = VirtPageNum::from(VirtAddr(start));
+        let end_vpn = VirtPageNum::from(VirtAddr(start + len).ceil());
+        for vpn in start_vpn.0 .. end_vpn.0 {
+            if let Some(pte) = memory_set.translate(VirtPageNum(vpn)) {
+                if pte.is_valid() {
+                    
+                    return -1;
+                }
+            }
+        }
+
+	// PTE_U 的语义是【用户能否访问该物理帧】
+        let permission = MapPermission::from_bits((port as u8) << 1).unwrap() | MapPermission::U;
+        memory_set.insert_framed_area(VirtAddr(start), VirtAddr(start+len), permission);
+        0
+    }
+
+    fn current_memory_set_munmap(&self, start_va: VirtAddr, end_va: VirtAddr) -> isize {
+        let mut inner = self.inner.exclusive_access();
+        let current_task = inner.current_task;
+        inner.tasks[current_task].memory_set.remove_mapped_frames(start_va, end_va)
+    }
+
+    fn get_current_id(&self) -> usize {
+        let inner = self.inner.exclusive_access();
+        inner.current_task
+    }
+
+    fn task_munmap(&self, start: usize, len: usize) -> isize {
+        if start & (PAGE_SIZE - 1) != 0 {
+            // println!(
+            //     "expect the start address to be aligned with a page, but get an invalid start: {:#x}",
+            //     start
+            // );
+            return -1;
+        }
+      
+        let mut inner = self.inner.exclusive_access();
+        let task_id = inner.current_task;
+        let current_task = &mut inner.tasks[task_id];
+        let memory_set = &mut current_task.memory_set;
+
+        // check valid
+        let start_vpn = VirtPageNum::from(VirtAddr(start));
+        let end_vpn = VirtPageNum::from(VirtAddr(start + len).ceil());
+        for vpn in start_vpn.0 .. end_vpn.0 {
+            if let Some(pte) = memory_set.translate(VirtPageNum(vpn)) {
+                if !pte.is_valid() {
+                    //println!("vpn {} is not valid before unmap", vpn);
+                    return -1;
+                }
+            }
+        }
+      
+        let vpn_range = VPNRange::new(start_vpn, end_vpn);
+        for vpn in vpn_range {
+            memory_set.munmap(vpn);
+        }
+        
+        0
+    }
 }
 
+pub fn task_munmap(start: usize, len: usize) -> isize{
+    TASK_MANAGER.task_munmap(start, len)
+}
+/// lab4 add
+pub fn current_id() -> usize {
+    TASK_MANAGER.get_current_id()
+}
+/// lab4 add
+pub fn current_memory_set_munmap(start_va: VirtAddr, end_va: VirtAddr) -> isize {
+    TASK_MANAGER.current_memory_set_munmap(start_va, end_va)
+}
+/// lab4 add
+pub fn task_map(start: usize, len: usize, port: usize) -> isize{
+    TASK_MANAGER.task_map(start, len, port)
+}
+/// lab3
+pub fn record_syscall(syscall_id: usize) {
+    TASK_MANAGER.set_syscall_times(syscall_id);
+}
+/// lab3 
+pub fn get_task_info(ti: *mut TaskInfo) {
+    TASK_MANAGER.get_current_task_info(ti);
+}
 /// Run the first task in task list.
 pub fn run_first_task() {
     TASK_MANAGER.run_first_task();
