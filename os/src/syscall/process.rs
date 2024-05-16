@@ -2,7 +2,7 @@
 use crate::{
     config::MAX_SYSCALL_NUM,
     task::{
-        change_program_brk, exit_current_and_run_next, suspend_current_and_run_next, TaskStatus,current_memory_set_munmap,current_id,task_map,task_munmap
+        change_program_brk, exit_current_and_run_next, suspend_current_and_run_next, TaskStatus,current_memory_set_munmap,task_map,task_munmap
     },
 };
 /// lab4 add
@@ -91,26 +91,7 @@ pub fn sys_mmap(_start: usize, _len: usize, _port: usize) -> isize {
 
 // YOUR JOB: Implement munmap.
 pub fn sys_munmap(start: usize, len: usize) -> isize {
-    //trace!("kernel: sys_munmap NOT IMPLEMENTED YET!");
-    // if (start & (PAGE_SIZE - 1)) != 0 {
-    //     return -1;
-    // }
 
-    // let len = ( (len + PAGE_SIZE - 1) / PAGE_SIZE ) * PAGE_SIZE;
-    // let start_vpn =  VirtAddr::from(start).floor();
-    // let end_vpn =  VirtAddr::from(start + len - 4095).floor();
-    // println!("current_id is :{:?}   unmap startVPN is: {:?}",current_id(), start_vpn);
-    // println!("current_id is :{:?}   unmap endVPN is: {:?}",current_id(), end_vpn);
-    // let page_table_user = PageTable::from_token(current_user_token());
-    // // make sure there are no unmapped pages in [start..start+len)
-    // for vpn in VPNRange::new(start_vpn, end_vpn) {
-    //     if let None = page_table_user.translate(vpn) {
-    //         println!("there are no unmapped pages {:?}", vpn);
-    //         return -1;
-    //     }
-    // }
-    
-    // current_memory_set_munmap( VirtAddr::from(start), VirtAddr::from(start + len))
     task_munmap(start,len)
 }
 /// change data segment size

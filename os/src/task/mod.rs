@@ -175,7 +175,7 @@ impl TaskManager {
         let inner = self.inner.exclusive_access();
         let current_id = inner.current_task;
         let TaskInfoInner {syscall_times, start_time} = inner.tasks[current_id].task_info_inner;
-
+        //局部变量
         unsafe {
             *ti = TaskInfo {
                 status: TaskStatus::Running,
@@ -228,10 +228,6 @@ impl TaskManager {
         inner.tasks[current_task].memory_set.remove_mapped_frames(start_va, end_va)
     }
 
-    fn get_current_id(&self) -> usize {
-        let inner = self.inner.exclusive_access();
-        inner.current_task
-    }
 
     fn task_munmap(&self, start: usize, len: usize) -> isize {
         if start & (PAGE_SIZE - 1) != 0 {
@@ -272,9 +268,7 @@ pub fn task_munmap(start: usize, len: usize) -> isize{
     TASK_MANAGER.task_munmap(start, len)
 }
 /// lab4 add
-pub fn current_id() -> usize {
-    TASK_MANAGER.get_current_id()
-}
+
 /// lab4 add
 pub fn current_memory_set_munmap(start_va: VirtAddr, end_va: VirtAddr) -> isize {
     TASK_MANAGER.current_memory_set_munmap(start_va, end_va)
