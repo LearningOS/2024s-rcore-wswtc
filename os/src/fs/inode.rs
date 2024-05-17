@@ -132,7 +132,7 @@ pub fn link( old_name: &str, new_name: &str) {
 }
 
 /// Unlink.
-pub fn unlink(path: &str)-> isize {
+pub fn unlink(path: &str) {
     ROOT_INODE.unlink(path)
 }
 impl File for OSInode {

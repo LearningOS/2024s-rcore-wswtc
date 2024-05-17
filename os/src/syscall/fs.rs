@@ -131,5 +131,6 @@ pub fn sys_unlinkat(_name: *const u8) -> isize {
     );
     let token = current_user_token();
     let path = translated_str(token, _name);
-    unlink(path.as_str())
+    unlink(path.as_str());
+    0
 }

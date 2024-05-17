@@ -251,29 +251,58 @@ impl Inode {
         block_cache_sync_all();
     }
     /// unlink
-    pub fn unlink(&self, name: &str) -> isize {
-        self.modify_disk_inode(|root_inode| {
-            let file_num = (root_inode.size as usize) / DIRENT_SZ;
-            // find the correct entry and modify it, else -1
-            for i in 0..file_num {
-                let mut dirent = DirEntry::empty();
-                let readn = root_inode.read_at(
-                    i * DIRENT_SZ,
-                    dirent.as_bytes_mut(),
-                    &self.block_device
-                );
-                // read size should == DIRENT_SZ
-                if readn != DIRENT_SZ {
-                    continue;
-                }
+    // pub fn unlink(&self, name: &str) -> isize {
+    //     self.modify_disk_inode(|root_inode| {
+    //         let file_num = (root_inode.size as usize) / DIRENT_SZ;
+    //         // find the correct entry and modify it, else -1
+    //         for i in 0..file_num {
+    //             let mut dirent = DirEntry::empty();
+    //             let readn = root_inode.read_at(
+    //                 i * DIRENT_SZ,
+    //                 dirent.as_bytes_mut(),
+    //                 &self.block_device
+    //             );
+    //             // read size should == DIRENT_SZ
+    //             if readn != DIRENT_SZ {
+    //                 continue;
+    //             }
 
-                if dirent.name() == name {
-                    let dirent = DirEntry::empty();
-                    root_inode.write_at(i * DIRENT_SZ, dirent.as_bytes(), &self.block_device);
-                    return 0;
+    //             if dirent.name() == name {
+    //                 let dirent = DirEntry::empty();
+    //                 root_inode.write_at(i * DIRENT_SZ, dirent.as_bytes(), &self.block_device);
+    //                 return 0;
+    //             }
+    //         }
+    //         -1
+    //     })
+    // }
+    pub fn unlink(&self, path: &str) {
+        let inode = self.find(path).unwrap();
+        inode.modify_disk_inode(|disk_inode| {
+            disk_inode.nlink -= 1;
+            if disk_inode.nlink == 0 {
+                disk_inode.clear_size(&self.block_device);
+            }
+        });
+
+        self.modify_disk_inode(|root_inode| {
+            let file_count = (root_inode.size as usize) / DIRENT_SZ;
+            let mut dirent = DirEntry::empty();
+            for i in 0..file_count {
+                assert_eq!(
+                    root_inode.read_at(DIRENT_SZ * i, dirent.as_bytes_mut(), &self.block_device,),
+                    DIRENT_SZ,
+                );
+                if dirent.name() == path {
+                    root_inode.write_at(
+                        DIRENT_SZ * i,
+                        DirEntry::empty().as_bytes(),
+                        &self.block_device,
+                    );
                 }
             }
-            -1
-        })
+        });
+
+        block_cache_sync_all();
     }
 }
