@@ -112,12 +112,13 @@ pub fn sys_linkat(_old_name: *const u8, new_name: *const u8) -> isize {
     let o_name = translated_str(token, _old_name);
     let n_name = translated_str(token, new_name);
     
-    if o_name == n_name {
-        -1
-    } else {
-        link(o_name.as_str(), n_name.as_str());
-        0
-    }
+    // if o_name == n_name {
+    //     -1
+    // } else {
+    //     link(o_name.as_str(), n_name.as_str());
+    //     0
+    // }
+    link(o_name.as_str(), n_name.as_str())
         
 }
     
