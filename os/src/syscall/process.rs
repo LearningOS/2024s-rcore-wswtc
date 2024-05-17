@@ -10,24 +10,34 @@ use crate::{
         add_task, current_task, current_user_token, exit_current_and_run_next,
         suspend_current_and_run_next, TaskStatus,
     },
+    task::{
+        current_memory_set_munmap,task_map,task_munmap
+    },
 };
+/// lab4 add
+use crate::task::get_current_task_info;
+pub use crate::mm::memory_set::MemorySet;
 
+use crate::mm::PhysAddr;
+use crate::mm::VirtAddr;
+use crate::timer::get_time_ms;
+use crate::mm::page_table::PageTable;
 #[repr(C)]
 #[derive(Debug)]
 pub struct TimeVal {
     pub sec: usize,
-    pub usec: usize,
+    pub msec: usize,
 }
 
 /// Task information
 #[allow(dead_code)]
 pub struct TaskInfo {
     /// Task status in it's life cycle
-    status: TaskStatus,
+    pub status: TaskStatus,
     /// The numbers of syscall called by task
-    syscall_times: [u32; MAX_SYSCALL_NUM],
+    pub syscall_times: [u32; MAX_SYSCALL_NUM],
     /// Total running time of task
-    time: usize,
+    pub time: usize,
 }
 
 pub fn sys_exit(exit_code: i32) -> ! {
@@ -122,7 +132,20 @@ pub fn sys_get_time(_ts: *mut TimeVal, _tz: usize) -> isize {
         "kernel:pid[{}] sys_get_time NOT IMPLEMENTED",
         current_task().unwrap().pid.0
     );
-    -1
+    let virt_addr = VirtAddr(_ts as usize);
+    if let Some(phys_addr) = virt2phys_addr(virt_addr) {
+        let us = get_time_ms() + 1000;
+        let kernel_ts = phys_addr.0 as *mut TimeVal;
+        unsafe {
+            *kernel_ts = TimeVal {
+                sec: us / 1_000,
+                msec: 1 + (us % 1_000),
+            };
+        }
+        0
+    } else {
+        -1
+    }
 }
 
 /// YOUR JOB: Finish sys_task_info to pass testcases
@@ -133,7 +156,13 @@ pub fn sys_task_info(_ti: *mut TaskInfo) -> isize {
         "kernel:pid[{}] sys_task_info NOT IMPLEMENTED",
         current_task().unwrap().pid.0
     );
-    -1
+    let virt_addr = VirtAddr(_ti as usize);
+    if let Some(phys_addr) = virt2phys_addr(virt_addr) {
+        get_current_task_info(phys_addr.0 as *mut TaskInfo);
+        0
+    } else {
+        -1
+    }
 }
 
 /// YOUR JOB: Implement mmap.
@@ -142,16 +171,16 @@ pub fn sys_mmap(_start: usize, _len: usize, _port: usize) -> isize {
         "kernel:pid[{}] sys_mmap NOT IMPLEMENTED",
         current_task().unwrap().pid.0
     );
-    -1
+    task_map(_start,_len,_port)
 }
 
 /// YOUR JOB: Implement munmap.
-pub fn sys_munmap(_start: usize, _len: usize) -> isize {
+pub fn sys_munmap(start: usize, len: usize) -> isize {
     trace!(
         "kernel:pid[{}] sys_munmap NOT IMPLEMENTED",
         current_task().unwrap().pid.0
     );
-    -1
+    task_munmap(start,len)
 }
 
 /// change data segment size
@@ -164,21 +193,53 @@ pub fn sys_sbrk(size: i32) -> isize {
     }
 }
 
+/// lab4add
+fn virt2phys_addr(virt_addr: VirtAddr) -> Option<PhysAddr> {
+    let offset = virt_addr.page_offset();
+    let vpn = virt_addr.floor();
+    let ppn = PageTable::from_token(current_user_token())
+        .translate(vpn)
+        .map(|entry| entry.ppn());
+    if let Some(ppn) = ppn {
+        Some(PhysAddr::combine(ppn, offset))
+    } else {
+        //println!("virt2phys_addr() fail");
+        None
+    }
+}
 /// YOUR JOB: Implement spawn.
 /// HINT: fork + exec =/= spawn
-pub fn sys_spawn(_path: *const u8) -> isize {
+pub fn sys_spawn(path: *const u8) -> isize {
     trace!(
         "kernel:pid[{}] sys_spawn NOT IMPLEMENTED",
         current_task().unwrap().pid.0
     );
-    -1
+    let token = current_user_token();
+    let path = translated_str(token, path);
+    if let Some(app_inode) = open_file(path.as_str(), OpenFlags::RDONLY) {
+        let all_data = app_inode.read_all();
+        let task = current_task().unwrap();
+        let task = task.spawn(all_data.as_slice());
+        let new_pid = task.pid.0;
+        add_task(task);
+        new_pid as isize
+    } else {
+        -1
+    }
 }
 
 // YOUR JOB: Set task priority.
-pub fn sys_set_priority(_prio: isize) -> isize {
+pub fn sys_set_priority(prio: isize) -> isize {
     trace!(
         "kernel:pid[{}] sys_set_priority NOT IMPLEMENTED",
         current_task().unwrap().pid.0
     );
-    -1
+    if prio >= 2 {
+        let current_task = current_task().unwrap();
+        let mut current_task = current_task.inner_exclusive_access();
+        current_task.prio = prio as usize;
+        prio as isize
+    } else {
+        -1
+    }
 }

@@ -7,7 +7,15 @@ const PA_WIDTH_SV39: usize = 56;
 const VA_WIDTH_SV39: usize = 39;
 const PPN_WIDTH_SV39: usize = PA_WIDTH_SV39 - PAGE_SIZE_BITS;
 const VPN_WIDTH_SV39: usize = VA_WIDTH_SV39 - PAGE_SIZE_BITS;
+use core::ops::Sub;
+/// lab4 add虚拟页号减法
+impl Sub<usize> for VirtPageNum {
+    type Output = VirtPageNum;
 
+    fn sub(self, rhs: usize) -> VirtPageNum {
+        VirtPageNum(self.0 - rhs)
+    }
+}
 /// Definitions
 #[repr(C)]
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
@@ -163,7 +171,22 @@ impl From<PhysPageNum> for PhysAddr {
         Self(v.0 << PAGE_SIZE_BITS)
     }
 }
+/// lab4 实现 BitOr trait。允许将一个 usize 类型的值与 PhysPageNum 进行按位或运算，并返回一个新的 PhysPageNum 类型的值，该值的每一位都是原始 PhysPageNum 的对应位与右操作数的对应位进行按位或操作得到的。
+impl core::ops::BitOr<usize> for PhysPageNum {
+    type Output = PhysPageNum;
 
+    fn bitor(self, rhs: usize) -> Self::Output {
+        PhysPageNum(self.0 | rhs)
+    }
+}
+/// lab4 实现 Shl trait。允许将 PhysPageNum 的值左移指定的位数，并返回一个新的 PhysPageNum 类型的值，该值的每一位都是原始 PhysPageNum 的对应位向左移动指定位数后的结果。
+impl core::ops::Shl<usize> for PhysPageNum {
+    type Output = PhysPageNum;
+
+    fn shl(self, rhs: usize) -> Self::Output {
+        PhysPageNum(self.0 << rhs)
+    }
+}
 impl VirtPageNum {
     /// Get the indexes of the page table entry
     pub fn indexes(&self) -> [usize; 3] {
@@ -178,6 +201,13 @@ impl VirtPageNum {
 }
 
 impl PhysAddr {
+        /// lab4
+        pub fn combine(ppn: PhysPageNum, offset: usize) -> PhysAddr {
+            // 计算物理地址，并转换成usize传给结构体
+            let phys_addr = (ppn<< 12) | offset;
+            let value: usize = usize::from(phys_addr);
+            PhysAddr(value)
+        }
     /// Get the immutable reference of physical address
     pub fn get_ref<T>(&self) -> &'static T {
         unsafe { (self.0 as *const T).as_ref().unwrap() }
