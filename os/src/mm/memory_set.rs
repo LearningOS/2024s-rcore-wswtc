@@ -3,7 +3,7 @@ use super::{frame_alloc, FrameTracker};
 use super::{PTEFlags, PageTable, PageTableEntry};
 use super::{PhysAddr, PhysPageNum, VirtAddr, VirtPageNum};
 use super::{StepByOne, VPNRange};
-use crate::config::{MEMORY_END, PAGE_SIZE, TRAMPOLINE, TRAP_CONTEXT_BASE, USER_STACK_SIZE};
+use crate::config::{KERNEL_STACK_SIZE, MEMORY_END, PAGE_SIZE, TRAMPOLINE, TRAP_CONTEXT_BASE, USER_STACK_SIZE};
 use crate::sync::UPSafeCell;
 use alloc::collections::BTreeMap;
 use alloc::sync::Arc;
@@ -37,6 +37,17 @@ pub struct MemorySet {
 }
 
 impl MemorySet {
+    pub fn clone(&self) -> Self {
+        // 克隆PageTable和MapArea向量
+        let cloned_page_table = self.page_table.clone();
+        let cloned_areas: Vec<MapArea> = self.areas.iter().map(|area| area.clone()).collect();
+
+        // 返回新的MemorySet实例
+        MemorySet {
+            page_table: cloned_page_table,
+            areas: cloned_areas,
+        }
+    }
     /// Create a new empty `MemorySet`.
     pub fn new_bare() -> Self {
         Self {
@@ -300,6 +311,32 @@ impl MemorySet {
             false
         }
     }
+    /// lab4 add
+    pub fn munmap(&mut self, vpn: VirtPageNum){
+        self.areas[0].unmap_one(&mut self.page_table, vpn);
+    }
+    /// lab4 add
+    /// TODO improve bruteforce munmap add
+    pub fn remove_mapped_frames(&mut self, start_va: VirtAddr, end_va: VirtAddr) -> isize {
+        // make sure the vpn is belong to current MemorySet
+        for vpn in VPNRange::new(start_va.floor(), end_va.ceil()) {
+            if let None = self.areas.iter()
+            .position(|area| area.data_frames.contains_key(&vpn)) {
+                return -1;
+            }
+        }
+        // drop the MapAreas in a bruteforce way
+        for vpn in VPNRange::new(start_va.floor(), end_va.ceil())  {
+            let index = self.areas.iter()
+                .position(|area| area.data_frames.contains_key(&vpn)).unwrap();
+            self.areas[index].unmap_one(&mut self.page_table, vpn);
+            self.areas[index].data_frames.remove(&vpn);
+            if self.areas[index].data_frames.is_empty() {
+                self.areas.remove(index);
+            }
+        }
+        0
+    }
 }
 /// map area structure, controls a contiguous piece of virtual memory
 pub struct MapArea {
@@ -310,6 +347,19 @@ pub struct MapArea {
 }
 
 impl MapArea {
+    pub fn clone(&self) -> Self {
+        let mut cloned_data_frames = BTreeMap::new();
+        for (vpn, frame_tracker) in &self.data_frames {
+            cloned_data_frames.insert(*vpn, frame_tracker.clone());
+        }
+        
+        MapArea {
+            vpn_range: self.vpn_range.clone(),
+            data_frames: cloned_data_frames,
+            map_type: self.map_type.clone(),
+            map_perm: self.map_perm.clone(),
+        }
+    }
     pub fn new(
         start_va: VirtAddr,
         end_va: VirtAddr,
@@ -421,6 +471,12 @@ bitflags! {
         ///Accessible in U mode
         const U = 1 << 4;
     }
+}
+/// Return (bottom, top) of a kernel stack in kernel space.
+pub fn kernel_stack_position(app_id: usize) -> (usize, usize) {
+    let top = TRAMPOLINE - app_id * (KERNEL_STACK_SIZE + PAGE_SIZE);
+    let bottom = top - KERNEL_STACK_SIZE;
+    (bottom, top)
 }
 
 /// remap test in kernel space

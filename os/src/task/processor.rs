@@ -12,10 +12,20 @@ use crate::trap::TrapContext;
 use alloc::sync::Arc;
 use lazy_static::*;
 
+// /// lab4add
+// use crate::mm::VPNRange;
+// use crate::timer::get_time_ms;
+// use crate::task::task::TaskControlBlockInner;
+// use crate::syscall::process::TaskInfo;
+// pub use crate::mm::memory_set::{kernel_stack_position, MapPermission, MemorySet, KERNEL_SPACE};
+// use crate::mm::VirtPageNum;
+// use crate::mm::VirtAddr;
+// use crate::config::PAGE_SIZE;
+
 /// Processor management structure
 pub struct Processor {
     ///The task currently executing on the current processor
-    current: Option<Arc<TaskControlBlock>>,
+    current: Option<Arc<TaskControlBlock>>,// inner.task
 
     ///The basic control flow of each core, helping to select and switch process
     idle_task_cx: TaskContext,
@@ -76,6 +86,30 @@ pub fn run_tasks() {
     }
 }
 
+// /// lab4 add
+// pub fn task_munmap(start: usize, len: usize) -> isize{
+//     PROCESSOR.exclusive_access().task_munmap(start, len)
+// }
+// /// lab4 add
+// pub fn current_id() -> usize {
+//     PROCESSOR.exclusive_access().get_current_id()
+// }
+// /// lab4 add
+// pub fn current_memory_set_munmap(start_va: VirtAddr, end_va: VirtAddr) -> isize {
+//     PROCESSOR.exclusive_access().current_memory_set_munmap(start_va, end_va)
+// }
+// /// lab4 add
+// pub fn task_map(start: usize, len: usize, port: usize) -> isize{
+//     PROCESSOR.exclusive_access().task_map(start, len, port)
+// }
+// /// lab3
+// pub fn record_syscall(syscall_id: usize) {
+//     PROCESSOR.exclusive_access().set_syscall_times(syscall_id);
+// }
+// /// lab3 
+// pub fn get_task_info(ti: *mut TaskInfo) {
+//     PROCESSOR.exclusive_access().get_current_task_info(ti);
+// }
 /// Get current task through take, leaving a None in its place
 pub fn take_current_task() -> Option<Arc<TaskControlBlock>> {
     PROCESSOR.exclusive_access().take_current()

@@ -72,6 +72,16 @@ pub struct PageTable {
 
 /// Assume that it won't oom when creating/mapping.
 impl PageTable {
+    pub fn clone(&self) -> Self {
+        // 克隆FrameTracker向量
+        let cloned_frames: Vec<FrameTracker> = self.frames.iter().map(|frame| frame.clone()).collect();
+
+        // 返回新的PageTable实例
+        PageTable {
+            root_ppn: self.root_ppn,
+            frames: cloned_frames,
+        }
+    }
     /// Create a new page table
     pub fn new() -> Self {
         let frame = frame_alloc().unwrap();

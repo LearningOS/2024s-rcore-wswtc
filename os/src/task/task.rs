@@ -1,14 +1,15 @@
 //! Types related to task management & Functions for completely changing TCB
 use super::TaskContext;
 use super::{kstack_alloc, pid_alloc, KernelStack, PidHandle};
-use crate::config::TRAP_CONTEXT_BASE;
+use crate::config::{INIT_PRIO,  TRAP_CONTEXT_BASE};
 use crate::mm::{MemorySet, PhysPageNum, VirtAddr, KERNEL_SPACE};
 use crate::sync::UPSafeCell;
 use crate::trap::{trap_handler, TrapContext};
 use alloc::sync::{Arc, Weak};
 use alloc::vec::Vec;
 use core::cell::RefMut;
-
+use crate::config::MAX_SYSCALL_NUM;//lab5 add
+use crate::timer::get_time_us;//lab5
 /// Task control block structure
 ///
 /// Directly save the contents that will not change during running
@@ -68,6 +69,17 @@ pub struct TaskControlBlockInner {
 
     /// Program break
     pub program_brk: usize,
+    /// lab5 add
+    pub syscall_times: [u32; MAX_SYSCALL_NUM],
+
+    /// lab5 add
+    pub start_time: usize,
+
+    /// The task priority
+    pub prio: usize,
+
+    /// The task stride
+    pub stride: usize,
 }
 
 impl TaskControlBlockInner {
@@ -118,6 +130,11 @@ impl TaskControlBlock {
                     exit_code: 0,
                     heap_bottom: user_sp,
                     program_brk: user_sp,
+                    syscall_times: [ 0; MAX_SYSCALL_NUM],
+                    start_time: get_time_us(),
+                    // current_task: 0,
+                    prio: INIT_PRIO,
+                    stride: 0,
                 })
             },
         };
@@ -191,6 +208,11 @@ impl TaskControlBlock {
                     exit_code: 0,
                     heap_bottom: parent_inner.heap_bottom,
                     program_brk: parent_inner.program_brk,
+                    syscall_times: parent_inner.syscall_times,
+                    start_time: parent_inner.start_time,
+                    prio: INIT_PRIO,
+                    stride: 0,
+                    // current_task: parent_inner.current_task,
                 })
             },
         });
@@ -235,6 +257,16 @@ impl TaskControlBlock {
         } else {
             None
         }
+    }
+    /// Spawn.
+    pub fn spawn(self: &Arc<Self>, elf_data: &[u8]) -> Arc<Self> {
+        // ---- access parent PCB exclusively
+        let mut parent_inner = self.inner_exclusive_access();
+
+        let task = Arc::new(Self::new(elf_data));
+        parent_inner.children.push(task.clone());
+
+        task
     }
 }
 
