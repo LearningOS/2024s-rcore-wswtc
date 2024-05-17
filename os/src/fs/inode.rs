@@ -126,9 +126,9 @@ pub fn open_file(name: &str, flags: OpenFlags) -> Option<Arc<OSInode>> {
     }
 }
 /// System link.
-pub fn link( old_name: &str, new_name: &str)-> isize {
+pub fn link( old_name: &str, new_name: &str) {
     println!("{}:{}", file!(), line!());
-    ROOT_INODE.linkat(old_name, new_name)
+    ROOT_INODE.link(old_name, new_name)
 }
 
 /// Unlink.
